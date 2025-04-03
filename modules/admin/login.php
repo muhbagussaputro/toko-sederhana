@@ -1,53 +1,47 @@
 <?php
-session_start();
-
-// Pengecekan database
-require_once 'db.php';
-
-// Periksa dan buat database jika diperlukan, tetapi tanpa redirect
-if (!isset($pdo) || !$pdo) {
-    // Koneksi database gagal, kemungkinan database belum ada
-    // Buat koneksi ke MySQL tanpa database
-    try {
-        $pdo_basic = new PDO("mysql:host=$host", $username, $password);
-        $pdo_basic->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        
-        // Cek apakah database sudah ada
-        $query = "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '$database'";
-        $db_exists = $pdo_basic->query($query)->fetchColumn();
-        
-        if (!$db_exists) {
-            // Panggil setup secara langsung, tanpa redirect
-            include_once 'auto_check_db.php';
-        }
-    } catch (PDOException $e) {
-        echo '<div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            Error koneksi database: ' . $e->getMessage() . '
-        </div>';
-    }
-}
-
 // Redirect jika sudah login
+session_start();
 if (isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit();
 }
 
+// Cek apakah database sudah dibuat
+$host = 'localhost';
+$username = 'root';
+$password = '';
+$database = 'db_toko';
+
+// Coba koneksi ke MySQL tanpa database dulu
+$conn_check = mysqli_connect($host, $username, $password);
+
+// Cek koneksi ke MySQL
+if (!$conn_check) {
+    die("Koneksi MySQL gagal: " . mysqli_connect_error());
+}
+
+// Cek apakah database sudah ada
+$db_exists = mysqli_select_db($conn_check, $database);
+
+if (!$db_exists) {
+    // Database belum ada, redirect ke setup.php
+    header("Location: setup.php");
+    exit();
+}
+
+mysqli_close($conn_check);
+
+// Koneksi ke database yang sudah ada
+$conn = mysqli_connect($host, $username, $password, $database);
+if (!$conn) {
+    die("Koneksi database gagal: " . mysqli_connect_error());
+}
+
 $error = "";
-
-// Cek pesan timeout
-if (isset($_GET['timeout']) && $_GET['timeout'] == 1) {
-    $error = "Sesi Anda telah berakhir karena tidak aktif. Silakan login kembali.";
-}
-
-// Cek pesan setup sukses
-if (isset($_GET['setup']) && $_GET['setup'] == 'success') {
-    $success = "Setup database berhasil dilakukan! Silakan login menggunakan kredensial default: <br>Admin: admin/admin123 <br>Kasir: kasir/kasir123";
-}
 
 // Proses login
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = cleanInput($_POST['username'], 'string');
+    $username = mysqli_real_escape_string($conn, $_POST['username']);
     $password = $_POST['password'];
     $remember = isset($_POST['remember']) ? true : false;
     
@@ -55,42 +49,67 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (empty($username) || empty($password)) {
         $error = "Username dan password harus diisi";
     } else {
-        try {
-            $stmt = $pdo->prepare("SELECT id, username, password, role FROM users WHERE username = ? LIMIT 1");
-            $stmt->execute([$username]);
-            $user = $stmt->fetch();
-
-            if ($user && password_verify($password, $user['password'])) {
-                // Set session
+        // Cek username
+        $query = "SELECT id, username, password, nama, role FROM users WHERE username = ?";
+        $stmt = mysqli_prepare($conn, $query);
+        mysqli_stmt_bind_param($stmt, "s", $username);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        
+        if (mysqli_num_rows($result) == 1) {
+            $user = mysqli_fetch_assoc($result);
+            
+            // Verifikasi password
+            if (password_verify($password, $user['password'])) {
+                // Login berhasil
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['username'] = $user['username'];
+                $_SESSION['nama'] = $user['nama'];
                 $_SESSION['role'] = $user['role'];
                 
-                // Set cookie jika remember me dicentang
+                // Jika pilih "Ingat Saya", atur cookie selama 30 hari
                 if ($remember) {
-                    $token = bin2hex(random_bytes(32));
-                    $expires = time() + (30 * 24 * 60 * 60); // 30 hari
+                    $token = bin2hex(random_bytes(16)); // Buat token acak
+                    setcookie('remember_token', $token, time() + (86400 * 30), "/"); // Cookie berlaku 30 hari
                     
-                    $stmt = $pdo->prepare("UPDATE users SET remember_token = ?, token_expires = ? WHERE id = ?");
-                    $stmt->execute([$token, date('Y-m-d H:i:s', $expires), $user['id']]);
-                    
-                    setcookie('remember_token', $token, $expires, '/', '', true, true);
+                    // Simpan token di database (buat tabel baru atau tambahkan kolom di users)
+                    $token_query = "UPDATE users SET remember_token = ? WHERE id = ?";
+                    $token_stmt = mysqli_prepare($conn, $token_query);
+                    mysqli_stmt_bind_param($token_stmt, "si", $token, $user['id']);
+                    mysqli_stmt_execute($token_stmt);
                 }
                 
                 // Log aktivitas login
-                logActivity($user['id'], 'Login berhasil', 'info');
+                $activity = "Login ke sistem";
+                $user_id = $user['id'];
+                $timestamp = date('Y-m-d H:i:s');
                 
-                header("Location: index.php");
+                $log_query = "INSERT INTO log_aktivitas (user_id, aktivitas, timestamp) 
+                              VALUES (?, ?, ?)";
+                
+                $log_stmt = mysqli_prepare($conn, $log_query);
+                mysqli_stmt_bind_param($log_stmt, "iss", $user_id, $activity, $timestamp);
+                mysqli_stmt_execute($log_stmt);
+                
+                // Redirect berdasarkan role
+                if ($user['role'] == 'kasir') {
+                    // Simpan URL transaksi baru sebagai preferensi, tapi redirect ke beranda
+                    $_SESSION['last_page'] = 'transaksi/tambah.php';
+                    header("Location: index.php");
+                } else {
+                    header("Location: index.php");
+                }
                 exit();
             } else {
-                $error = "Username atau password salah";
-                logActivity(0, "Percobaan login gagal untuk username: $username", 'warning');
+                $error = "Password salah";
             }
-        } catch (PDOException $e) {
-            $error = "Terjadi kesalahan sistem. Silakan coba beberapa saat lagi.";
+        } else {
+            $error = "Username tidak ditemukan";
         }
     }
 }
+
+mysqli_close($conn);
 ?>
 
 <!DOCTYPE html>
@@ -131,12 +150,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php if (!empty($error)): ?>
                 <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
                     <?php echo $error; ?>
-                </div>
-            <?php endif; ?>
-            
-            <?php if (isset($success)): ?>
-                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                    <?php echo $success; ?>
                 </div>
             <?php endif; ?>
             

@@ -1,10 +1,12 @@
 <?php
+session_start();
+
 // Include koneksi database
-require_once '../db.php';
+require_once __DIR__ . '/../../db.php';
 
 // Cek apakah user sudah login
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../login.php");
+    header("Location: /login.php");
     exit();
 }
 
@@ -26,10 +28,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Validasi input
     if (empty($kode) || empty($nama) || empty($stok) || empty($harga)) {
         $error = "Semua field harus diisi!";
+        // Generate kode baru jika error
+        $kode = generateKodeBarang();
     } elseif (!is_numeric($stok) || $stok < 0) {
         $error = "Stok harus berupa angka positif!";
+        // Generate kode baru jika error
+        $kode = generateKodeBarang();
     } elseif (!is_numeric($harga) || $harga <= 0) {
         $error = "Harga harus berupa angka positif!";
+        // Generate kode baru jika error
+        $kode = generateKodeBarang();
     } else {
         try {
             // Cek apakah kode sudah ada
@@ -53,6 +61,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 if ($count > 0) {
                     $error = "Sistem tidak dapat menghasilkan kode barang yang unik. Silakan coba lagi nanti.";
+                    // Generate kode baru lagi untuk form berikutnya
+                    $kode = generateKodeBarang();
                 } else {
                     // Lanjut dengan kode baru
                     goto insert_data;
@@ -77,19 +87,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     // Generate kode baru untuk entry berikutnya
                     $kode = generateKodeBarang();
                 } else {
-                    throw new Exception("Gagal menyimpan data barang: " . mysqli_error($conn));
+                    $error = "Gagal menyimpan data barang: " . mysqli_error($conn);
+                    // Generate kode baru jika error
+                    $kode = generateKodeBarang();
                 }
             }
         } catch (Exception $e) {
             error_log("Error tambah barang: " . $e->getMessage());
             $error = "Terjadi kesalahan sistem. Silakan coba beberapa saat lagi.";
+            // Generate kode baru jika error
+            $kode = generateKodeBarang();
         }
     }
 }
 
 // Include header
 $title = "Tambah Barang";
-include '../header.php';
+include __DIR__ . '/../../header.php';
 ?>
 
 <div class="bg-white rounded-lg shadow-md overflow-hidden">
@@ -200,17 +214,77 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.value < 0) this.value = 0;
     });
     
-    // Tampilkan loading overlay saat form disubmit
-    form.addEventListener('submit', function() {
-        if (this.checkValidity()) {
-            loadingOverlay.classList.remove('hidden');
-            loadingOverlay.classList.add('flex');
+    // Validasi form sebelum submit
+    form.addEventListener('submit', function(event) {
+        const nama = document.getElementById('nama').value.trim();
+        const stok = document.getElementById('stok').value.trim();
+        const harga = document.getElementById('harga').value.trim();
+        
+        let isValid = true;
+        let errorMessage = '';
+        
+        if (!nama) {
+            errorMessage = 'Nama barang tidak boleh kosong!';
+            isValid = false;
+        } else if (!stok) {
+            errorMessage = 'Stok tidak boleh kosong!';
+            isValid = false;
+        } else if (parseInt(stok) < 0) {
+            errorMessage = 'Stok tidak boleh negatif!';
+            isValid = false;
+        } else if (!harga) {
+            errorMessage = 'Harga tidak boleh kosong!';
+            isValid = false;
+        } else if (parseInt(harga) <= 0) {
+            errorMessage = 'Harga harus lebih dari 0!';
+            isValid = false;
         }
+        
+        if (!isValid) {
+            event.preventDefault();
+            // Tampilkan pesan error
+            alert(errorMessage);
+            // Meminta kode barang baru dengan AJAX jika perlu
+            refreshKodeBarang();
+            return false;
+        }
+        
+        // Tampilkan loading overlay saat form valid dan disubmit
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.classList.add('flex');
     });
+    
+    // Jika ada pesan error dari server, buat fungsi untuk refresh kode
+    const errorMessage = document.querySelector('.bg-red-100');
+    if (errorMessage) {
+        // Tambahkan link untuk refresh kode
+        const refreshLink = document.createElement('a');
+        refreshLink.href = '#';
+        refreshLink.className = 'ml-3 text-blue-600 hover:underline';
+        refreshLink.textContent = 'Refresh kode barang';
+        refreshLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            refreshKodeBarang();
+        });
+        errorMessage.appendChild(refreshLink);
+    }
+    
+    // Fungsi untuk refresh kode barang dengan AJAX
+    function refreshKodeBarang() {
+        // Buat request AJAX untuk meminta kode barang baru
+        fetch('get_kode_barang.php')
+            .then(response => response.text())
+            .then(kode => {
+                document.getElementById('kode').value = kode;
+            })
+            .catch(error => {
+                console.error('Error refreshing kode barang:', error);
+            });
+    }
 });
 </script>
 
 <?php
 // Include footer
-include '../footer.php';
+include __DIR__ . '/../../footer.php';
 ?> 

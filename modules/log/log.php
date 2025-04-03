@@ -1,6 +1,6 @@
 <?php
 // Include koneksi database
-require_once '../db.php';
+require_once __DIR__ . '/../../db.php';
 
 // Cek apakah user adalah admin
 if ($_SESSION['role'] != 'admin') {
@@ -28,59 +28,68 @@ if (!empty($user_filter)) {
 }
 
 // Tambahkan filter level jika dipilih (jika kolom level ada)
-$column_result = mysqli_query($conn, "SHOW COLUMNS FROM log_aktivitas LIKE 'level'");
-$has_level_column = mysqli_num_rows($column_result) > 0;
-
-if ($has_level_column && !empty($level_filter)) {
-    $where_conditions[] = "l.level = ?";
-    $params[] = $level_filter;
-    $types .= "s";
+try {
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM log_aktivitas LIKE 'level'");
+    $stmt->execute();
+    $has_level_column = $stmt->rowCount() > 0;
+    
+    if ($has_level_column && !empty($level_filter)) {
+        $where_conditions[] = "l.level = ?";
+        $params[] = $level_filter;
+    }
+    
+    // Tambahkan filter pencarian jika ada
+    if (!empty($search)) {
+        $where_conditions[] = "l.aktivitas LIKE ?";
+        $params[] = "%$search%";
+    }
+    
+    // Buat where clause
+    $where_clause = "WHERE " . implode(" AND ", $where_conditions);
+    
+    // Query untuk mendapatkan daftar log aktivitas menggunakan PDO
+    $query = "SELECT l.id, l.aktivitas, l.timestamp, u.nama, u.username, u.role";
+    
+    // Tambahkan kolom level jika ada
+    if ($has_level_column) {
+        $query .= ", l.level";
+    }
+    
+    $query .= " FROM log_aktivitas l
+               JOIN users u ON l.user_id = u.id
+               $where_clause
+               ORDER BY l.timestamp DESC";
+    
+    // Eksekusi query dengan PDO
+    $stmt = $pdo->prepare($query);
+    for ($i = 0; $i < count($params); $i++) {
+        $stmt->bindValue($i+1, $params[$i]);
+    }
+    $stmt->execute();
+    $result = $stmt->fetchAll();
+    
+    // Query untuk mendapatkan pengguna untuk dropdown filter
+    $stmt_users = $pdo->query("SELECT id, nama, username FROM users ORDER BY nama");
+    $users_result = $stmt_users->fetchAll();
+} catch (PDOException $e) {
+    handleError("Error pada log aktivitas: " . $e->getMessage());
+    $error_message = "Terjadi kesalahan saat memuat data log. Silakan coba lagi atau hubungi administrator.";
 }
-
-// Tambahkan filter pencarian jika ada
-if (!empty($search)) {
-    $where_conditions[] = "l.aktivitas LIKE ?";
-    $params[] = "%$search%";
-    $types .= "s";
-}
-
-// Buat where clause
-$where_clause = "WHERE " . implode(" AND ", $where_conditions);
-
-// Query untuk mendapatkan daftar log aktivitas menggunakan prepared statement
-$query = "SELECT l.id, l.aktivitas, l.timestamp, u.nama, u.username, u.role";
-
-// Tambahkan kolom level jika ada
-if ($has_level_column) {
-    $query .= ", l.level";
-}
-
-$query .= " FROM log_aktivitas l
-           JOIN users u ON l.user_id = u.id
-           $where_clause
-           ORDER BY l.timestamp DESC";
-
-// Eksekusi query dengan prepared statement
-$stmt = mysqli_prepare($conn, $query);
-mysqli_stmt_bind_param($stmt, $types, ...$params);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-// Query untuk mendapatkan pengguna untuk dropdown filter
-$users_query = "SELECT id, nama, username FROM users ORDER BY nama";
-$users_result = mysqli_query($conn, $users_query);
 
 // Include header
 $title = "Log Aktivitas";
-include '../header.php';
+include __DIR__ . '/../../header.php';
 ?>
 
 <div class="bg-white rounded-lg shadow-md overflow-hidden">
     <div class="flex justify-between items-center p-4 border-b border-gray-200">
         <h1 class="text-xl font-semibold text-gray-800">Log Aktivitas Penting</h1>
         <div class="flex space-x-2">
-            <a href="update_log_table.php" class="bg-warning hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 inline-flex items-center">
+            <button id="btnOptimasi" class="bg-warning hover:bg-yellow-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 inline-flex items-center">
                 <i class="fas fa-cogs mr-2"></i> Optimasi Log
+            </button>
+            <a href="../export/export_log.php?tgl_mulai=<?php echo urlencode($tgl_mulai); ?>&tgl_selesai=<?php echo urlencode($tgl_selesai); ?><?php echo !empty($user_filter) ? '&user_id=' . urlencode($user_filter) : ''; ?><?php echo !empty($level_filter) ? '&level=' . urlencode($level_filter) : ''; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" class="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 inline-flex items-center">
+                <i class="fas fa-file-excel mr-2"></i> Export Excel
             </a>
             <div class="relative inline-block">
                 <button id="printOptions" class="bg-info hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 inline-flex items-center">
@@ -100,33 +109,33 @@ include '../header.php';
     
     <div class="p-4">
         <!-- Filter Form -->
-        <form action="" method="get" class="mb-6 bg-gray-50 p-4 rounded-lg">
+        <form id="filterForm" action="" method="get" class="mb-6 bg-gray-50 p-4 rounded-lg">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                 <div>
                     <label for="tgl_mulai" class="block text-gray-700 text-sm font-medium mb-2">Tanggal Mulai:</label>
                     <input type="date" id="tgl_mulai" name="tgl_mulai" value="<?php echo $tgl_mulai; ?>"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary filter-input">
                 </div>
                 <div>
                     <label for="tgl_selesai" class="block text-gray-700 text-sm font-medium mb-2">Tanggal Selesai:</label>
                     <input type="date" id="tgl_selesai" name="tgl_selesai" value="<?php echo $tgl_selesai; ?>"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary filter-input">
                 </div>
                 <div>
                     <label for="user_id" class="block text-gray-700 text-sm font-medium mb-2">Pengguna:</label>
-                    <select id="user_id" name="user_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                    <select id="user_id" name="user_id" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary filter-input">
                         <option value="">Semua Pengguna</option>
-                        <?php while ($user = mysqli_fetch_assoc($users_result)): ?>
+                        <?php foreach ($users_result as $user): ?>
                             <option value="<?php echo $user['id']; ?>" <?php echo $user_filter == $user['id'] ? 'selected' : ''; ?>>
                                 <?php echo $user['nama'] . ' (' . $user['username'] . ')'; ?>
                             </option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <?php if ($has_level_column): ?>
                 <div>
                     <label for="level" class="block text-gray-700 text-sm font-medium mb-2">Tingkat Kepentingan:</label>
-                    <select id="level" name="level" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                    <select id="level" name="level" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary filter-input">
                         <option value="">Semua</option>
                         <option value="penting" <?php echo $level_filter == 'penting' ? 'selected' : ''; ?>>Penting</option>
                         <option value="normal" <?php echo $level_filter == 'normal' ? 'selected' : ''; ?>>Normal</option>
@@ -136,22 +145,22 @@ include '../header.php';
                 <div>
                     <label for="search" class="block text-gray-700 text-sm font-medium mb-2">Cari Aktivitas:</label>
                     <input type="text" id="search" name="search" value="<?php echo $search; ?>" placeholder="Cari..."
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary filter-input">
                 </div>
                 <div class="flex space-x-2 col-span-1 md:col-span-2 lg:col-span-5">
-                    <button type="submit" class="bg-info hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 flex-1 md:flex-none">
-                        <i class="fas fa-filter mr-2"></i> Filter
+                    <button type="button" id="resetFilter" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 text-center">
+                        <i class="fas fa-undo mr-2"></i> Reset Filter
                     </button>
-                    <a href="log.php" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 text-center flex-1 md:flex-none">
-                        <i class="fas fa-undo mr-2"></i> Reset
-                    </a>
+                    <div id="loadingIndicator" class="hidden ml-3 text-sm text-gray-600">
+                        <i class="fas fa-spinner fa-spin mr-1"></i> Memuat data...
+                    </div>
                 </div>
             </div>
         </form>
         
         <!-- Hasil Pencarian -->
         <div class="mb-4 text-sm text-gray-600">
-            <p>Menampilkan <?php echo mysqli_num_rows($result); ?> log aktivitas <?php echo $level_filter == 'penting' ? 'penting' : ($level_filter == 'normal' ? 'normal' : ''); ?> 
+            <p>Menampilkan <?php echo count($result); ?> log aktivitas <?php echo $level_filter == 'penting' ? 'penting' : ($level_filter == 'normal' ? 'normal' : ''); ?> 
             <?php echo !empty($search) ? "dengan kata kunci \"" . htmlspecialchars($search) . "\"" : ""; ?></p>
         </div>
         
@@ -171,8 +180,8 @@ include '../header.php';
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                    <?php if (mysqli_num_rows($result) > 0): ?>
-                        <?php while ($row = mysqli_fetch_assoc($result)): ?>
+                    <?php if (count($result) > 0): ?>
+                        <?php foreach ($result as $row): ?>
                             <tr class="hover:bg-gray-50 <?php echo isset($row['level']) && $row['level'] == 'penting' ? 'bg-yellow-50' : ''; ?>">
                                 <td class="px-4 py-3 whitespace-nowrap"><?php echo $row['id']; ?></td>
                                 <td class="px-4 py-3 whitespace-nowrap"><?php echo date('d/m/Y H:i:s', strtotime($row['timestamp'])); ?></td>
@@ -192,10 +201,34 @@ include '../header.php';
                                 </td>
                                 <?php endif; ?>
                                 <td class="px-4 py-3 <?php echo isset($row['level']) && $row['level'] == 'penting' ? 'font-semibold' : ''; ?>">
-                                    <?php echo $row['aktivitas']; ?>
+                                    <?php 
+                                    // Cek pola transaksi dan ubah menjadi link
+                                    $aktivitas = $row['aktivitas'];
+                                    
+                                    // Pola 1: "Membuat transaksi baru #123"
+                                    if (preg_match('/Membuat transaksi baru #(\d+)/', $aktivitas, $matches)) {
+                                        $transaksi_id = $matches[1];
+                                        $aktivitas = preg_replace(
+                                            '/(Membuat transaksi baru #)(\d+)/', 
+                                            '$1<a href="../transaksi/detail.php?id=$2" class="text-blue-600 hover:text-blue-800 hover:underline">$2</a>',
+                                            $aktivitas
+                                        );
+                                    } 
+                                    // Pola 2: "transaksi #123" (tanpa kata "baru")
+                                    elseif (preg_match('/transaksi #(\d+)/i', $aktivitas, $matches)) {
+                                        $transaksi_id = $matches[1];
+                                        $aktivitas = preg_replace(
+                                            '/(transaksi #)(\d+)/i', 
+                                            '$1<a href="../transaksi/detail.php?id=$2" class="text-blue-600 hover:text-blue-800 hover:underline">$2</a>',
+                                            $aktivitas
+                                        );
+                                    }
+                                    
+                                    echo $aktivitas;
+                                    ?>
                                 </td>
                             </tr>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
                             <td colspan="<?php echo $has_level_column ? '6' : '5'; ?>" class="px-4 py-4 text-center text-gray-500">Tidak ada data log aktivitas</td>
@@ -448,10 +481,8 @@ include '../header.php';
             </thead>
             <tbody>
                 <?php 
-                // Reset result pointer
-                mysqli_data_seek($result, 0);
-                if (mysqli_num_rows($result) > 0): 
-                    while ($row = mysqli_fetch_assoc($result)): 
+                if (count($result) > 0): 
+                    foreach ($result as $row): 
                 ?>
                     <tr class="item-row">
                         <td><?php echo date('d/m H:i', strtotime($row['timestamp'])); ?></td>
@@ -459,7 +490,7 @@ include '../header.php';
                         <td><?php echo $row['aktivitas']; ?></td>
                     </tr>
                 <?php 
-                    endwhile; 
+                    endforeach; 
                 else: 
                 ?>
                     <tr>
@@ -470,7 +501,7 @@ include '../header.php';
         </table>
         
         <div class="struk-footer">
-            <div class="print-info">Total: <?php echo mysqli_num_rows($result); ?> log aktivitas</div>
+            <div class="print-info">Total: <?php echo count($result); ?> log aktivitas</div>
             <div class="print-info">==============================</div>
             <div class="print-info">Log aktivitas adalah keterangan tentang aktivitas</div>
             <div class="print-info">penting yang dilakukan user pada sistem.</div>
@@ -533,11 +564,9 @@ include '../header.php';
             </thead>
             <tbody>
                 <?php 
-                // Reset result pointer
-                mysqli_data_seek($result, 0);
                 $no = 1;
-                if (mysqli_num_rows($result) > 0): 
-                    while ($row = mysqli_fetch_assoc($result)): 
+                if (count($result) > 0): 
+                    foreach ($result as $row): 
                 ?>
                     <tr>
                         <td><?php echo $no++; ?></td>
@@ -550,7 +579,7 @@ include '../header.php';
                         <td><?php echo $row['aktivitas']; ?></td>
                     </tr>
                 <?php 
-                    endwhile; 
+                    endforeach; 
                 else: 
                 ?>
                     <tr>
@@ -561,7 +590,7 @@ include '../header.php';
         </table>
         
         <div class="report-footer">
-            <p>Laporan ini dibuat secara otomatis oleh sistem. Jumlah total log aktivitas: <?php echo mysqli_num_rows($result); ?></p>
+            <p>Laporan ini dibuat secara otomatis oleh sistem. Jumlah total log aktivitas: <?php echo count($result); ?></p>
         </div>
         
         <div class="report-signature">
@@ -579,7 +608,103 @@ include '../header.php';
     </div>
 </div>
 
+<!-- Modal Optimasi Log -->
+<div id="optimasiModal" class="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 hidden">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="bg-white w-full max-w-md mx-auto rounded-lg shadow-xl transform transition-all">
+            <div class="bg-warning text-white px-4 py-3 flex justify-between items-center rounded-t-lg">
+                <h3 class="text-lg font-semibold"><i class="fas fa-cogs mr-2"></i>Optimasi Log Aktivitas</h3>
+                <button id="closeOptimasiModal" class="text-white hover:text-gray-200 focus:outline-none">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="optimasiContent" class="p-6 max-h-[70vh] overflow-y-auto">
+                <div class="text-center mb-6">
+                    <i class="fas fa-spinner fa-spin text-warning text-4xl mb-3"></i>
+                    <p>Silakan tunggu, sistem sedang mengoptimasi data log...</p>
+                </div>
+            </div>
+            <div class="bg-gray-100 px-4 py-3 rounded-b-lg flex justify-end">
+                <button id="closeOptimasiBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm transition duration-300 hidden">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+// Script untuk menangani filter dan pencarian real-time
+document.addEventListener('DOMContentLoaded', function() {
+    // Semua elemen input filter
+    const filterInputs = document.querySelectorAll('.filter-input');
+    const filterForm = document.getElementById('filterForm');
+    const resetButton = document.getElementById('resetFilter');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    let timer = null;
+    
+    // Fungsi untuk memuat data dengan AJAX
+    function loadData() {
+        const formData = new FormData(filterForm);
+        const queryParams = new URLSearchParams(formData).toString();
+        
+        // Tampilkan indikator loading
+        loadingIndicator.classList.remove('hidden');
+        
+        // Simpan filter di URL untuk bookmark/refresh
+        history.replaceState(null, '', '?' + queryParams);
+        
+        // Lakukan request AJAX
+        fetch('get_log_data.php?' + queryParams)
+            .then(response => response.text())
+            .then(html => {
+                // Update tabel dengan hasil
+                document.querySelector('.overflow-x-auto').innerHTML = html;
+                loadingIndicator.classList.add('hidden');
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                loadingIndicator.classList.add('hidden');
+            });
+    }
+    
+    // Event listener untuk setiap elemen input
+    filterInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Clear timer yang sudah ada
+            if (timer) {
+                clearTimeout(timer);
+            }
+            
+            // Set timer untuk delay sebelum memuat data (menghindari terlalu banyak request)
+            timer = setTimeout(loadData, 500);
+        });
+        
+        // Untuk dropdown yang berubah nilainya
+        if (input.tagName === 'SELECT') {
+            input.addEventListener('change', function() {
+                if (timer) {
+                    clearTimeout(timer);
+                }
+                timer = setTimeout(loadData, 300);
+            });
+        }
+    });
+    
+    // Event listener untuk reset filter
+    resetButton.addEventListener('click', function() {
+        // Reset form
+        filterForm.reset();
+        
+        // Set tanggal default
+        document.getElementById('tgl_mulai').value = '<?php echo date('Y-m-d', strtotime('-7 days')); ?>';
+        document.getElementById('tgl_selesai').value = '<?php echo date('Y-m-d'); ?>';
+        
+        // Muat data dengan filter yang di-reset
+        loadData();
+    });
+});
+
 // Toggle dropdown menu cetak
 document.getElementById('printOptions').addEventListener('click', function(e) {
     e.preventDefault();
@@ -594,6 +719,68 @@ document.addEventListener('click', function(e) {
     
     if (!printOptions.contains(e.target) && !printDropdown.contains(e.target)) {
         printDropdown.classList.add('hidden');
+    }
+});
+
+// Fungsi untuk menangani Modal Optimasi Log
+const optimasiModal = document.getElementById('optimasiModal');
+const closeOptimasiModal = document.getElementById('closeOptimasiModal');
+const closeOptimasiBtn = document.getElementById('closeOptimasiBtn');
+const optimasiContent = document.getElementById('optimasiContent');
+const btnOptimasi = document.getElementById('btnOptimasi');
+
+// Tombol buka modal
+btnOptimasi.addEventListener('click', function() {
+    // Tampilkan modal dengan animasi fade in
+    optimasiModal.classList.remove('hidden');
+    optimasiModal.style.opacity = '0';
+    optimasiModal.style.transition = 'opacity 0.3s ease';
+    
+    setTimeout(() => {
+        optimasiModal.style.opacity = '1';
+    }, 10);
+    
+    document.body.classList.add('overflow-hidden');
+    
+    // Lakukan request Ajax untuk optimasi
+    fetch('optimasi_log_ajax.php')
+        .then(response => response.text())
+        .then(html => {
+            // Update konten modal dengan hasil
+            optimasiContent.innerHTML = html;
+            // Tampilkan tombol tutup
+            closeOptimasiBtn.classList.remove('hidden');
+        })
+        .catch(error => {
+            optimasiContent.innerHTML = `
+                <div class="bg-red-100 text-red-700 p-4 rounded-md">
+                    <p class="font-semibold">Terjadi kesalahan!</p>
+                    <p>Tidak dapat mengoptimasi log aktivitas. Silakan coba lagi nanti.</p>
+                    <p class="text-xs mt-2">Error: ${error.message}</p>
+                </div>
+            `;
+            closeOptimasiBtn.classList.remove('hidden');
+        });
+});
+
+// Fungsi untuk menutup modal dengan animasi
+function closeModalWithAnimation() {
+    optimasiModal.style.opacity = '0';
+    
+    setTimeout(() => {
+        optimasiModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }, 300); // Sesuaikan dengan durasi transisi
+}
+
+// Tombol tutup modal
+closeOptimasiModal.addEventListener('click', closeModalWithAnimation);
+closeOptimasiBtn.addEventListener('click', closeModalWithAnimation);
+
+// Tutup modal saat klik di luar modal (opsional)
+optimasiModal.addEventListener('click', function(e) {
+    if (e.target === optimasiModal) {
+        closeModalWithAnimation();
     }
 });
 
@@ -626,5 +813,5 @@ function printLog(format = 'struk') {
 
 <?php
 // Include footer
-include '../footer.php';
+include __DIR__ . '/../../footer.php';
 ?> 

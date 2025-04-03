@@ -1,18 +1,20 @@
 <?php
 // Include koneksi database
-require_once '../db.php';
+require_once __DIR__ . '/../../db.php';
 
-// Cek apakah user adalah admin
-if ($_SESSION['role'] != 'admin') {
-    header("Location: ../index.php");
+// Cek apakah user sudah login
+if (!isset($_SESSION['user_id'])) {
+    header("Location: /login.php");
     exit();
 }
 
-// Validasi input - Sanitasi input dari user
-$tipe_laporan = isset($_GET['tipe']) ? filter_var($_GET['tipe'], FILTER_SANITIZE_SPECIAL_CHARS) : 'harian';
+// Validasi input dengan sanitasi
+$tipe_laporan = isset($_GET['tipe']) ? filter_var($_GET['tipe'], FILTER_SANITIZE_SPECIAL_CHARS) : '';
 $tanggal = isset($_GET['tanggal']) ? filter_var($_GET['tanggal'], FILTER_SANITIZE_SPECIAL_CHARS) : date('Y-m-d');
 $bulan = isset($_GET['bulan']) ? filter_var($_GET['bulan'], FILTER_SANITIZE_SPECIAL_CHARS) : date('Y-m');
 $tahun = isset($_GET['tahun']) ? filter_var($_GET['tahun'], FILTER_SANITIZE_SPECIAL_CHARS) : date('Y');
+$tgl_mulai = isset($_GET['tgl_mulai']) ? filter_var($_GET['tgl_mulai'], FILTER_SANITIZE_SPECIAL_CHARS) : date('Y-m-d', strtotime('-7 days'));
+$tgl_selesai = isset($_GET['tgl_selesai']) ? filter_var($_GET['tgl_selesai'], FILTER_SANITIZE_SPECIAL_CHARS) : date('Y-m-d');
 
 // Validasi format tanggal
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal)) {
@@ -24,12 +26,19 @@ if (!preg_match('/^\d{4}-\d{2}$/', $bulan)) {
 if (!preg_match('/^\d{4}$/', $tahun)) {
     $tahun = date('Y');
 }
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tgl_mulai)) {
+    $tgl_mulai = date('Y-m-d', strtotime('-7 days'));
+}
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tgl_selesai)) {
+    $tgl_selesai = date('Y-m-d');
+}
 
 // Set judul dan filter SQL berdasarkan tipe laporan
 $judul_laporan = '';
+$periode_laporan = '';
 $sql_filter = '';
+$sql_params = [];
 
-// Menggunakan prepared statement untuk mencegah SQL injection
 if ($tipe_laporan == 'harian') {
     $judul_laporan = 'Laporan Penjualan Harian: ' . date('d/m/Y', strtotime($tanggal));
     $periode_laporan = 'Tanggal: ' . date('d/m/Y', strtotime($tanggal));
@@ -57,74 +66,64 @@ if ($tipe_laporan == 'harian') {
     $sql_params = [$tahun];
     $filename = 'Laporan_Tahunan_' . $tahun;
 } else {
-    // Default ke harian jika tipe tidak valid
-    $tipe_laporan = 'harian';
-    $judul_laporan = 'Laporan Penjualan Harian: ' . date('d/m/Y', strtotime($tanggal));
-    $periode_laporan = 'Tanggal: ' . date('d/m/Y', strtotime($tanggal));
-    $sql_filter = "WHERE DATE(t.tanggal) = ?";
-    $sql_params = [$tanggal];
-    $filename = 'Laporan_Harian_' . date('Y-m-d', strtotime($tanggal));
+    // Default ke rentang tanggal jika tipe tidak valid
+    $judul_laporan = 'Laporan Data Transaksi';
+    $periode_laporan = 'Periode: ' . date('d/m/Y', strtotime($tgl_mulai)) . ' - ' . date('d/m/Y', strtotime($tgl_selesai));
+    $sql_filter = "WHERE DATE(t.tanggal) BETWEEN ? AND ?";
+    $sql_params = [$tgl_mulai, $tgl_selesai];
+    $filename = 'Transaksi_' . date('Y-m-d', strtotime($tgl_mulai)) . '_sd_' . date('Y-m-d', strtotime($tgl_selesai));
 }
 
-// Query untuk mendapatkan data transaksi dengan error handling
 try {
-    // Berikan nama yang lebih deskriptif untuk file Excel
-    $filename = preg_replace('/[^a-zA-Z0-9_-]/', '', $filename);
+    // Nama file Excel
     $nama_toko = "Toko Sederhana";
     
-    // Optimasi query - menggunakan prepared statement dan mengoptimalkan JOIN
-$query = "SELECT t.id, t.tanggal, t.total, u.nama as user,
-              COUNT(td.id) as jumlah_item,
-              GROUP_CONCAT(CONCAT(b.nama, ' (', td.jumlah, ')') SEPARATOR ', ') as detail_barang
-          FROM transaksi t
-          JOIN users u ON t.user_id = u.id
-              LEFT JOIN transaksi_detail td ON td.transaksi_id = t.id
-              LEFT JOIN barang b ON td.barang_id = b.id
-          $sql_filter
-              GROUP BY t.id
-          ORDER BY t.tanggal DESC";
+    // Query untuk mendapatkan daftar transaksi dengan detail item
+    $query = "SELECT t.id, t.tanggal, t.total, u.username as user, u.nama as nama_user,
+            COUNT(td.id) as jumlah_item,
+            GROUP_CONCAT(CONCAT(b.nama, ' (', td.jumlah, ')') SEPARATOR ', ') as detail_barang
+           FROM transaksi t 
+           JOIN users u ON t.user_id = u.id 
+           LEFT JOIN transaksi_detail td ON td.transaksi_id = t.id
+           LEFT JOIN barang b ON td.barang_id = b.id
+           $sql_filter
+           GROUP BY t.id
+           ORDER BY t.tanggal DESC";
     
-    // Prepare dan bind parameters
-    $stmt = mysqli_prepare($conn, $query);
-    mysqli_stmt_bind_param($stmt, str_repeat('s', count($sql_params)), ...$sql_params);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    
-    if (!$result) {
-        throw new Exception("Error dalam query transaksi: " . mysqli_error($conn));
+    $stmt = $pdo->prepare($query);
+    for ($i = 0; $i < count($sql_params); $i++) {
+        $stmt->bindValue($i+1, $sql_params[$i]);
     }
-
-    // Optimasi query total - juga menggunakan prepared statement
-    $query_total = "SELECT COUNT(DISTINCT t.id) as total_transaksi, 
-                   SUM(t.total) as total_penjualan,
-                   AVG(t.total) as rata_rata_penjualan,
+    $stmt->execute();
+    $transactions = $stmt->fetchAll();
+    
+    // Hitung total pendapatan dalam periode
+    $query_total = "SELECT SUM(t.total) as total_pendapatan,
+                   COUNT(*) as jumlah_transaksi,
+                   AVG(t.total) as rata_transaksi,
                    MIN(t.total) as min_transaksi,
                    MAX(t.total) as max_transaksi
-               FROM transaksi t
-               $sql_filter";
+                   FROM transaksi t
+                   $sql_filter";
     
-    $stmt_total = mysqli_prepare($conn, $query_total);
-    mysqli_stmt_bind_param($stmt_total, str_repeat('s', count($sql_params)), ...$sql_params);
-    mysqli_stmt_execute($stmt_total);
-    $result_total = mysqli_stmt_get_result($stmt_total);
-    
-    if (!$result_total) {
-        throw new Exception("Error dalam query total: " . mysqli_error($conn));
+    $stmt_total = $pdo->prepare($query_total);
+    for ($i = 0; $i < count($sql_params); $i++) {
+        $stmt_total->bindValue($i+1, $sql_params[$i]);
     }
+    $stmt_total->execute();
+    $summary = $stmt_total->fetch();
     
-$row_total = mysqli_fetch_assoc($result_total);
-
     // Log aktivitas ekspor
-    $activity = "Mengekspor $judul_laporan ke Excel";
-    logActivity($_SESSION['user_id'], $activity);
+    $activity = "Mengekspor data transaksi periode " . date('d/m/Y', strtotime($tgl_mulai)) . " - " . date('d/m/Y', strtotime($tgl_selesai));
+    logActivity($_SESSION['user_id'], $activity, 'penting');
 
-    // Set header untuk download file Excel dengan deteksi browser
+    // Set header untuk download file Excel
     header('Content-Type: application/vnd.ms-excel; charset=utf-8');
     header('Content-Disposition: attachment; filename="' . $filename . '.xls"');
     header('Cache-Control: max-age=0');
     header('Pragma: public');
     
-    // Mulai output HTML yang diformat untuk Excel dengan dukungan browser yang lebih baik
+    // Mulai output HTML yang diformat untuk Excel
     echo '<!DOCTYPE html>';
     echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
     echo '<head>';
@@ -136,7 +135,7 @@ $row_total = mysqli_fetch_assoc($result_total);
     echo '<x:ExcelWorkbook>';
     echo '<x:ExcelWorksheets>';
     echo '<x:ExcelWorksheet>';
-    echo '<x:Name>Laporan</x:Name>';
+    echo '<x:Name>Transaksi</x:Name>';
     echo '<x:WorksheetOptions>';
     echo '<x:DisplayGridlines/>';
     echo '</x:WorksheetOptions>';
@@ -176,11 +175,11 @@ $row_total = mysqli_fetch_assoc($result_total);
     // Tabel ringkasan
     echo '<div class="subheader">RINGKASAN TRANSAKSI</div>';
     echo '<table class="summary-table">';
-    echo '<tr><td class="summary-header">Total Transaksi</td><td class="number">' . number_format($row_total['total_transaksi'], 0, ',', '.') . ' transaksi</td></tr>';
-    echo '<tr><td class="summary-header">Total Penjualan</td><td class="currency">Rp ' . number_format($row_total['total_penjualan'] ?? 0, 0, ',', '.') . '</td></tr>';
-    echo '<tr><td class="summary-header">Rata-rata Penjualan</td><td class="currency">Rp ' . number_format($row_total['rata_rata_penjualan'] ?? 0, 0, ',', '.') . '</td></tr>';
-    echo '<tr><td class="summary-header">Transaksi Terkecil</td><td class="currency">Rp ' . number_format($row_total['min_transaksi'] ?? 0, 0, ',', '.') . '</td></tr>';
-    echo '<tr><td class="summary-header">Transaksi Terbesar</td><td class="currency">Rp ' . number_format($row_total['max_transaksi'] ?? 0, 0, ',', '.') . '</td></tr>';
+    echo '<tr><td class="summary-header">Total Transaksi</td><td class="number">' . number_format($summary['jumlah_transaksi'], 0, ',', '.') . ' transaksi</td></tr>';
+    echo '<tr><td class="summary-header">Total Pendapatan</td><td class="currency">Rp ' . number_format($summary['total_pendapatan'] ?? 0, 0, ',', '.') . '</td></tr>';
+    echo '<tr><td class="summary-header">Rata-rata Transaksi</td><td class="currency">Rp ' . number_format($summary['rata_transaksi'] ?? 0, 0, ',', '.') . '</td></tr>';
+    echo '<tr><td class="summary-header">Transaksi Terkecil</td><td class="currency">Rp ' . number_format($summary['min_transaksi'] ?? 0, 0, ',', '.') . '</td></tr>';
+    echo '<tr><td class="summary-header">Transaksi Terbesar</td><td class="currency">Rp ' . number_format($summary['max_transaksi'] ?? 0, 0, ',', '.') . '</td></tr>';
     echo '</table>';
     echo '<br>';
     
@@ -190,7 +189,7 @@ $row_total = mysqli_fetch_assoc($result_total);
     echo '<thead>';
     echo '<tr>';
     echo '<th class="align-center">No.</th>';
-    echo '<th>ID</th>';
+    echo '<th>ID Transaksi</th>';
     echo '<th>Tanggal & Waktu</th>';
     echo '<th>Kasir</th>';
     echo '<th class="align-center">Jumlah Item</th>';
@@ -200,12 +199,12 @@ $row_total = mysqli_fetch_assoc($result_total);
     echo '</thead>';
     echo '<tbody>';
     
-    if (mysqli_num_rows($result) > 0) {
+    if (count($transactions) > 0) {
         $no = 1;
         $grand_total = 0;
         $total_items = 0;
         
-        while ($data = mysqli_fetch_assoc($result)) {
+        foreach ($transactions as $data) {
             $grand_total += $data['total'];
             $total_items += $data['jumlah_item'];
             
@@ -213,7 +212,7 @@ $row_total = mysqli_fetch_assoc($result_total);
             echo '<td class="align-center">' . $no++ . '</td>';
             echo '<td>TRX-' . str_pad($data['id'], 4, '0', STR_PAD_LEFT) . '</td>';
             echo '<td>' . date('d/m/Y H:i', strtotime($data['tanggal'])) . '</td>';
-            echo '<td>' . htmlspecialchars($data['user']) . '</td>';
+            echo '<td>' . htmlspecialchars($data['nama_user'] ?? $data['user']) . '</td>';
             echo '<td class="align-center number">' . $data['jumlah_item'] . ' item</td>';
             echo '<td class="align-right currency">Rp ' . number_format($data['total'], 0, ',', '.') . '</td>';
             echo '<td>' . htmlspecialchars($data['detail_barang'] ?? '-') . '</td>';
@@ -241,25 +240,12 @@ $row_total = mysqli_fetch_assoc($result_total);
     echo '</body>';
     echo '</html>';
     
-} catch (Exception $e) {
-    // Log error dengan detail lebih lengkap
-    $error_message = "Error dalam export Excel: " . $e->getMessage();
-    error_log("[" . date('Y-m-d H:i:s') . "] " . $error_message);
+} catch (PDOException $e) {
+    // Log error
+    handleError("Error pada ekspor data transaksi: " . $e->getMessage());
     
-    // Log ke database
-    if (isset($_SESSION['user_id'])) {
-        $error_activity = "Error ekspor Excel: " . $error_message;
-        logActivity($_SESSION['user_id'], $error_activity);
-    }
-    
-    // Tampilkan pesan error yang user-friendly
-    echo "<script>
-        alert('Terjadi kesalahan dalam mengekspor data: " . addslashes($e->getMessage()) . "\\nSilakan coba lagi atau hubungi administrator.');
-        window.history.back();
-    </script>";
-}
-
-// Tutup koneksi database
-mysqli_close($conn);
-exit();
-?> 
+    // Redirect ke halaman sebelumnya dengan pesan error
+    $_SESSION['error'] = "Terjadi kesalahan saat mengekspor data. Silakan coba lagi.";
+    header("Location: " . $_SERVER['HTTP_REFERER']);
+    exit();
+} 

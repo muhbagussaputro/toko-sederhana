@@ -1,0 +1,95 @@
+[2025-04-03 13:44:30] User: guest - Error pada proses login: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'status' in 'where clause'
+[2025-04-03 13:45:12] User: guest - Error pada proses login: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'status' in 'where clause'
+[2025-04-03 14:58:57] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WHERE DATE(t.tanggal) BETWEEN ? AND ?
+                           GROUP BY t.id' at line 8
+[2025-04-03 15:08:16] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WHERE DATE(t.tanggal) BETWEEN ? AND ?
+                           GROUP BY t.id' at line 8
+[2025-04-03 15:10:36] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WHERE DATE(t.tanggal) = ?
+                           GROUP BY t.id
+           ' at line 8
+[2025-04-03 15:27:00] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WHERE DATE(t.tanggal) = ?
+                           GROUP BY t.id
+           ' at line 8
+[2025-04-03 15:32:12] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42000]: Syntax error or access violation: 1064 You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WHERE DATE(t.tanggal) = ?
+                           GROUP BY t.id
+           ' at line 8
+[2025-04-03 15:42:32] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42S22]: Column not found: 1054 Unknown column 't.tanggal' in 'where clause'
+[2025-04-03 15:42:35] User: 1 - Error pada ekspor data transaksi: SQLSTATE[42S22]: Column not found: 1054 Unknown column 't.tanggal' in 'where clause'
+[2025-04-03 23:06:13] User: 2 - Error tambah kategori: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'test_toko1.kategori_barang' doesn't exist
+[2025-04-03 23:06:16] User: 2 - Error tambah kategori: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'test_toko1.kategori_barang' doesn't exist
+[2025-04-03 23:06:35] User: 2 - Error query kategori: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'test_toko1.kategori_barang' doesn't exist
+[2025-04-04 00:57:42] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:43] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:44] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:48] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:51] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:53] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:53] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:54] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:54] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:54] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:54] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:54] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:55] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 00:57:55] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:03:16] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:03:23] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:03:52] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:04:21] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:04:23] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:04:25] User: 2 - Unknown database 'db_test' | Code: 1049
+[2025-04-04 01:29:38] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:39] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:40] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:40] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:40] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:40] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:41] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:41] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:41] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:29:41] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:41] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:42] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:42] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:42] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:42] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:46] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:47] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:47] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:50] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:50] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:32:50] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:35:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:35:55] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:00] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:05] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:10] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:15] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:17] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:21] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:26] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:31] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:36] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:42] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:36:48] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 01:38:48] User: guest - Error pada proses login: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'db_toko.users' doesn't exist
+[2025-04-04 01:41:38] User: guest - Error pada proses login: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'db_toko.users' doesn't exist
+[2025-04-04 01:57:53] User: guest - Error pada proses login: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'db_toko.users' doesn't exist
+[2025-04-04 01:58:29] User: guest - Error pada proses login: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'db_toko.users' doesn't exist
+[2025-04-04 02:57:49] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 02:57:50] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 02:57:51] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 02:57:51] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 02:57:51] User: guest - Unknown database 'db_toko' | Code: 1049
+[2025-04-04 02:57:51] User: guest - Unknown database 'db_toko' | Code: 1049

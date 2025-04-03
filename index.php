@@ -1,148 +1,129 @@
 <?php
-// Include koneksi database
+session_start();
+
+// Auto check database, buat otomatis jika belum ada
+include_once 'auto_check_db.php';
+
 require_once 'db.php';
+
+// Cek apakah user sudah login
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
 
 // Include header
 include 'header.php';
 
-// Ambil statistik untuk dashboard
-// 1. Jumlah barang
-$query_barang = "SELECT COUNT(*) as total FROM barang";
-$result_barang = mysqli_query($conn, $query_barang);
-$total_barang = mysqli_fetch_assoc($result_barang)['total'];
+try {
+    // 1. Jumlah barang
+    $stmt = $pdo->query("SELECT COUNT(*) as total FROM barang");
+    $total_barang = $stmt->fetch()['total'];
 
-// 2. Jumlah transaksi hari ini
-$today = date('Y-m-d');
-$query_transaksi = "SELECT COUNT(*) as total FROM transaksi WHERE DATE(tanggal) = '$today'";
-$result_transaksi = mysqli_query($conn, $query_transaksi);
-$transaksi_hari_ini = mysqli_fetch_assoc($result_transaksi)['total'];
+    // 2. Jumlah transaksi hari ini
+    $today = date('Y-m-d');
+    $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM transaksi WHERE DATE(tanggal) = ?");
+    $stmt->execute([$today]);
+    $transaksi_hari_ini = $stmt->fetch()['total'];
 
-// 3. Total penjualan hari ini
-$query_total = "SELECT SUM(total) as total_penjualan FROM transaksi WHERE DATE(tanggal) = '$today'";
-$result_total = mysqli_query($conn, $query_total);
-$total_penjualan = mysqli_fetch_assoc($result_total)['total_penjualan'];
-if (!$total_penjualan) $total_penjualan = 0;
+    // 3. Total penjualan hari ini
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(total), 0) as total_penjualan FROM transaksi WHERE DATE(tanggal) = ?");
+    $stmt->execute([$today]);
+    $total_penjualan = $stmt->fetch()['total_penjualan'];
 
-// 4. Transaksi terbaru
-$query_terbaru = "SELECT t.id, t.tanggal, t.total, u.nama as user
-                 FROM transaksi t
-                 JOIN users u ON t.user_id = u.id
-                 ORDER BY t.tanggal DESC
-                 LIMIT 5";
-$result_terbaru = mysqli_query($conn, $query_terbaru);
+    // 4. Transaksi terbaru
+    $stmt = $pdo->query("SELECT t.id, t.tanggal, t.total, u.username as user
+                        FROM transaksi t
+                        JOIN users u ON t.user_id = u.id
+                        ORDER BY t.tanggal DESC
+                        LIMIT 5");
+    $transaksi_terbaru = $stmt->fetchAll();
 
-// 5. Stok barang yang hampir habis (kurang dari 10)
-$query_stok = "SELECT kode, nama, stok FROM barang WHERE stok < 10 ORDER BY stok ASC LIMIT 5";
-$result_stok = mysqli_query($conn, $query_stok);
+    // 5. Stok barang yang hampir habis
+    $stmt = $pdo->query("SELECT kode, nama, stok FROM barang WHERE stok < 10 ORDER BY stok ASC LIMIT 5");
+    $stok_menipis = $stmt->fetchAll();
+
+} catch (PDOException $e) {
+    handleError("Error pada dashboard: " . $e->getMessage());
+    $error = "Terjadi kesalahan saat memuat data dashboard. Silakan coba beberapa saat lagi.";
+}
 ?>
 
 <h1 class="text-2xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Dashboard</h1>
 
+<?php if (isset($error)): ?>
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+        <span class="block sm:inline"><?php echo $error; ?></span>
+    </div>
+<?php endif; ?>
+
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
     <div class="bg-white rounded-lg shadow-md p-6 flex flex-col items-center justify-center hover:shadow-lg transition duration-300">
-        <div class="text-3xl font-bold text-primary mb-2"><?php echo $total_barang; ?></div>
+        <div class="text-3xl font-bold text-primary mb-2"><?php echo number_format($total_barang); ?></div>
         <div class="text-gray-600">Total Barang</div>
     </div>
     
     <div class="bg-white rounded-lg shadow-md p-6 flex flex-col items-center justify-center hover:shadow-lg transition duration-300">
-        <div class="text-3xl font-bold text-primary mb-2"><?php echo $transaksi_hari_ini; ?></div>
+        <div class="text-3xl font-bold text-primary mb-2"><?php echo number_format($transaksi_hari_ini); ?></div>
         <div class="text-gray-600">Transaksi Hari Ini</div>
     </div>
     
     <div class="bg-white rounded-lg shadow-md p-6 flex flex-col items-center justify-center hover:shadow-lg transition duration-300">
         <div class="text-3xl font-bold text-primary mb-2">Rp <?php echo number_format($total_penjualan, 0, ',', '.'); ?></div>
-        <div class="text-gray-600">Penjualan Hari Ini</div>
+        <div class="text-gray-600">Total Penjualan Hari Ini</div>
     </div>
 </div>
 
-<div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-    <div class="flex justify-between items-center p-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-800">Transaksi Terbaru</h2>
-        <a href="transaksi/list.php" class="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition duration-300">Lihat Semua</a>
-    </div>
-    <div class="p-4 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tanggal</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                <?php if (mysqli_num_rows($result_terbaru) > 0): ?>
-                    <?php while ($row = mysqli_fetch_assoc($result_terbaru)): ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap"><?php echo $row['id']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap"><?php echo date('d/m/Y H:i', strtotime($row['tanggal'])); ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap"><?php echo $row['user']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap">Rp <?php echo number_format($row['total'], 0, ',', '.'); ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <a href="transaksi/detail.php?id=<?php echo $row['id']; ?>" class="bg-info hover:bg-blue-600 text-white px-3 py-1 rounded-md text-sm transition duration-300">Detail</a>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-gray-500">Belum ada transaksi</td>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Transaksi Terbaru -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Transaksi Terbaru</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="px-4 py-2 text-left">Tanggal</th>
+                        <th class="px-4 py-2 text-left">Kasir</th>
+                        <th class="px-4 py-2 text-right">Total</th>
                     </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-    <div class="flex justify-between items-center p-4 border-b border-gray-200">
-        <h2 class="text-lg font-semibold text-gray-800">Stok Hampir Habis</h2>
-        <a href="barang/list.php" class="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition duration-300">Lihat Semua Barang</a>
-    </div>
-    <div class="p-4 overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kode</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama Barang</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stok</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                <?php if (mysqli_num_rows($result_stok) > 0): ?>
-                    <?php while ($row = mysqli_fetch_assoc($result_stok)): ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap"><?php echo $row['kode']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap"><?php echo $row['nama']; ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="<?php echo $row['stok'] <= 5 ? 'text-red-600 font-medium' : 'text-yellow-600'; ?>">
-                                    <?php echo $row['stok']; ?>
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <a href="barang/edit.php?id=<?php 
-                                    // Ambil ID barang berdasarkan kode
-                                    $kode_barang = $row['kode'];
-                                    $query_id = "SELECT id FROM barang WHERE kode = '$kode_barang'";
-                                    $result_id = mysqli_query($conn, $query_id);
-                                    $id_barang = mysqli_fetch_assoc($result_id)['id'];
-                                    echo $id_barang; 
-                                ?>" class="bg-warning hover:bg-yellow-600 text-white px-3 py-1 rounded-md text-sm transition duration-300">Edit</a>
-                            </td>
-                        </tr>
-                    <?php endwhile; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">Tidak ada barang dengan stok menipis</td>
+                </thead>
+                <tbody>
+                    <?php foreach ($transaksi_terbaru as $transaksi): ?>
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2"><?php echo date('d/m/Y H:i', strtotime($transaksi['tanggal'])); ?></td>
+                        <td class="px-4 py-2"><?php echo htmlspecialchars($transaksi['user']); ?></td>
+                        <td class="px-4 py-2 text-right">Rp <?php echo number_format($transaksi['total'], 0, ',', '.'); ?></td>
                     </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Stok Menipis -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <h2 class="text-xl font-semibold mb-4">Stok Menipis</h2>
+        <div class="overflow-x-auto">
+            <table class="min-w-full table-auto">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="px-4 py-2 text-left">Kode</th>
+                        <th class="px-4 py-2 text-left">Nama Barang</th>
+                        <th class="px-4 py-2 text-right">Stok</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($stok_menipis as $barang): ?>
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2"><?php echo htmlspecialchars($barang['kode']); ?></td>
+                        <td class="px-4 py-2"><?php echo htmlspecialchars($barang['nama']); ?></td>
+                        <td class="px-4 py-2 text-right"><?php echo number_format($barang['stok']); ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
-<?php
-// Include footer
-include 'footer.php';
-?> 
+<?php include 'footer.php'; ?> 
