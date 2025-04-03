@@ -1,0 +1,35 @@
+# File sistem operasi
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor dan IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.komodoproject
+.komodotools/
+nbproject/
+.project
+.buildpath
+.settings/
+
+# File log
+error.log
+*.log
+log/*.txt
+log/*.log
+
+# File backup database
+db_backup/*.sql
+
+# File konfigurasi dan credential
+db_config.php
+/config/credentials.php
+
+# File autogit
+autogit.log
+
+# File vendor
+/vendor/ 
