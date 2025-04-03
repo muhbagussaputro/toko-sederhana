@@ -93,7 +93,7 @@ Untuk memindahkan aplikasi ini ke laptop lain, ikuti langkah-langkah berikut:
    - Install Laragon
    - Paste folder `toko-sederhana` ke `C:\laragon\www\`
    - Jalankan Laragon (Start All)
-   - Akses `http://localhost/toko-sederhana/migrate.php`
+   - Akses `http://toko-sederhana.test`
    - Upload file backup database
    - Klik tombol "Upload & Restore Database"
    - Selesai! Aplikasi siap digunakan di laptop baru
